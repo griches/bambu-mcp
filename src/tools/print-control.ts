@@ -70,6 +70,12 @@ export function registerPrintControlTools(
         .describe(
           "Filename on the printer's SD card (e.g. 'model.3mf' or 'benchy.gcode')",
         ),
+      path: z
+        .string()
+        .optional()
+        .describe(
+          "Directory path where the file lives on the SD card (e.g. '/cache/'). Default: '/cache/'",
+        ),
       plate: z
         .number()
         .optional()
@@ -112,6 +118,7 @@ export function registerPrintControlTools(
     async ({
       printer,
       file,
+      path,
       plate,
       ams_mapping,
       bed_type,
@@ -123,8 +130,9 @@ export function registerPrintControlTools(
       use_ams,
     }) => {
       return fleet.executeOnPrinters(printer, async (conn) => {
-        await conn.mqtt.printFile({
+        const result = await conn.mqtt.printFile({
           file,
+          path: path || "/cache/",
           plate,
           ams_mapping,
           bed_type,
@@ -135,7 +143,16 @@ export function registerPrintControlTools(
           layer_inspect,
           use_ams,
         });
-        return `Print started: ${file}`;
+        const resultStr = JSON.stringify(result);
+        if (
+          result?.result?.toUpperCase() === "FAIL" ||
+          result?.reason ||
+          result?.error ||
+          (result?.result && result.result !== "SUCCESS")
+        ) {
+          return `Failed to start print: ${resultStr}`;
+        }
+        return `Print started: ${file}\nPrinter response: ${resultStr}`;
       });
     },
   );

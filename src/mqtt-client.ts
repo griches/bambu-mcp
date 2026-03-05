@@ -244,6 +244,7 @@ export class BambuMQTTClient {
 
   async printFile(options: {
     file: string;
+    path?: string;
     plate?: number;
     ams_mapping?: number[];
     bed_type?: string;
@@ -262,6 +263,7 @@ export class BambuMQTTClient {
 
   private async printGcodeFile(options: {
     file: string;
+    path?: string;
     bed_type?: string;
     bed_leveling?: boolean;
     flow_cali?: boolean;
@@ -270,11 +272,12 @@ export class BambuMQTTClient {
     timelapse?: boolean;
     use_ams?: boolean;
   }): Promise<any> {
+    const dir = (options.path || "/cache/").replace(/\/$/, "");
     return this.sendCommand("print.gcode_file", {
-      param: options.file,
+      param: `${dir}/${options.file}`,
       subtask_name: options.file,
       bed_type: options.bed_type || "auto",
-      bed_levelling: options.bed_leveling !== false,
+      bed_leveling: options.bed_leveling !== false,
       flow_cali: options.flow_cali !== false,
       vibration_cali: options.vibration_cali !== false,
       layer_inspect: options.layer_inspect || false,
@@ -285,6 +288,7 @@ export class BambuMQTTClient {
 
   private async print3mfFile(options: {
     file: string;
+    path?: string;
     plate?: number;
     ams_mapping?: number[];
     bed_type?: string;
@@ -298,11 +302,12 @@ export class BambuMQTTClient {
     const plate = options.plate || 1;
     const useAms = options.use_ams !== false;
     const amsMapping = options.ams_mapping || [0];
+    const dir = (options.path || "/cache/").replace(/\/$/, "");
 
     return this.sendCommand("print.project_file", {
       param: `Metadata/plate_${plate}.gcode`,
       file: options.file,
-      url: `file:///sdcard/${options.file}`,
+      url: `file:///sdcard${dir}/${options.file}`,
       subtask_name: options.file.replace(/\.3mf$/i, ""),
       project_id: "0",
       profile_id: "0",
