@@ -144,12 +144,12 @@ export function registerPrintControlTools(
           use_ams,
         });
         const resultStr = JSON.stringify(result);
-        if (
+        const isFail =
           result?.result?.toUpperCase() === "FAIL" ||
-          result?.reason ||
+          (result?.reason && result.reason.toLowerCase() !== "success") ||
           result?.error ||
-          (result?.result && result.result !== "SUCCESS")
-        ) {
+          (result?.result && result.result.toLowerCase() !== "success");
+        if (isFail) {
           return `Failed to start print: ${resultStr}`;
         }
         return `Print started: ${file}\nPrinter response: ${resultStr}`;

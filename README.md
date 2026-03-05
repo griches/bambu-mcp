@@ -22,11 +22,24 @@ Tested with:
 
 Should work with any Bambu Lab printer that supports MQTT over LAN (X1C, X1, P1P, A1, etc.).
 
+## Printer Setup
+
+Before using this MCP server, each printer must be configured for local access:
+
+1. **Enable LAN Only Mode** — On the printer's touchscreen, go to **Settings > Network** and switch to **LAN Only Mode**. This is required for local MQTT commands (including starting prints) to work. Cloud mode blocks local print commands.
+
+2. **Enable Developer Mode** — On the printer's touchscreen, go to **Settings > Network > LAN Only Mode** and enable **Developer Mode**. This allows third-party tools to send commands over the local network.
+
+3. **Note the access code** — After enabling LAN Only / Developer Mode, a new **Access Code** will be shown on the printer screen. You'll need this to connect.
+
+> **Note:** Enabling LAN Only Mode means you lose cloud features (remote monitoring via Bambu Handy app, cloud printing). All control must be done locally.
+
 ## System Requirements
 
 - **Node.js** 18+
 - Bambu Lab printer(s) on the same local network
-- Printer **access code** and **serial number** (found in printer Settings > WLAN / Device, or in Bambu Studio)
+- Printer in **LAN Only Mode** with **Developer Mode** enabled
+- Printer **access code** and **serial number** (found in printer Settings > WLAN / Device)
 
 ## Installation
 
@@ -101,6 +114,7 @@ Printer configurations are saved to `~/.bambu-mcp/printers.json` and automatical
 |------|-------------|
 | `add_printer` | Add a printer to the fleet (IP, access code, serial number) |
 | `remove_printer` | Remove a printer and disconnect |
+| `reconnect_printer` | Reconnect a printer (or all) after network changes |
 | `list_printers` | List all configured printers with connection status |
 
 ### Status
@@ -179,7 +193,7 @@ This server communicates with printers using:
 - **MQTT** (port 8883, TLS) — for commands and status updates
 - **FTP** (port 990, implicit FTPS) — for file operations
 
-Printers do **not** need to be in LAN Only mode, though LAN Only mode guarantees full local access. In cloud mode, MQTT access is typically available but some features (camera, FTP) may be restricted on newer firmware.
+Printers must be in **LAN Only Mode** with **Developer Mode** enabled. See [Printer Setup](#printer-setup) above.
 
 ## X.509 Certificate Authentication
 
