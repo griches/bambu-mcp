@@ -74,7 +74,7 @@ export function registerPrintControlTools(
         .string()
         .optional()
         .describe(
-          "Directory path where the file lives on the SD card. Use '/' for files at root (e.g. USB/H2D), '/cache/' for cached files (default). Must match the path shown by list_files.",
+          "Directory path where the file was found by list_files (e.g. '/', '/cache/'). If omitted, defaults based on printer model.",
         ),
       plate: z
         .number()
@@ -132,7 +132,7 @@ export function registerPrintControlTools(
       return fleet.executeOnPrinters(printer, async (conn) => {
         const result = await conn.mqtt.printFile({
           file,
-          path: path || "/cache/",
+          path,
           plate,
           ams_mapping,
           bed_type,
