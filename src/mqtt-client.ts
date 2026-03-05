@@ -310,7 +310,6 @@ export class BambuMQTTClient {
     const amsMapping = options.ams_mapping || [0];
     const h2d = this.isH2D();
 
-    // H2D uses ftp:/// URL, other printers use file:///sdcard/
     let url: string;
     if (h2d) {
       const dir = (options.path || "/").replace(/\/$/, "");
@@ -320,31 +319,30 @@ export class BambuMQTTClient {
       url = `file:///sdcard${dir}/${options.file}`;
     }
 
-    const bedLeveling = options.bed_leveling !== false;
-    const flowCali = options.flow_cali !== false;
-    const vibrationCali = options.vibration_cali !== false;
-    const layerInspect = options.layer_inspect || false;
-    const timelapse = options.timelapse || false;
-
-    return this.sendCommand("print.project_file", {
+    const params: Record<string, any> = {
       param: `Metadata/plate_${plate}.gcode`,
-      file: options.file,
       url,
-      md5: "",
-      subtask_name: options.file.replace(/\.3mf$/i, "").replace(/\.gcode$/i, ""),
+      subtask_name: options.file,
       project_id: "0",
       profile_id: "0",
       task_id: "0",
       subtask_id: "0",
       bed_type: options.bed_type || "auto",
-      bed_leveling: h2d ? (bedLeveling ? 1 : 0) : bedLeveling,
-      flow_cali: h2d ? (flowCali ? 1 : 0) : flowCali,
-      vibration_cali: h2d ? (vibrationCali ? 1 : 0) : vibrationCali,
-      layer_inspect: h2d ? (layerInspect ? 1 : 0) : layerInspect,
-      timelapse: h2d ? (timelapse ? 1 : 0) : timelapse,
+      bed_leveling: options.bed_leveling !== false,
+      flow_cali: options.flow_cali !== false,
+      vibration_cali: options.vibration_cali !== false,
+      layer_inspect: options.layer_inspect || false,
+      timelapse: options.timelapse || false,
       use_ams: useAms,
       ams_mapping: amsMapping,
-    });
+    };
+
+    // HA integration doesn't send file/md5 for H2D
+    if (!h2d) {
+      params.file = options.file;
+    }
+
+    return this.sendCommand("print.project_file", params);
   }
 
   // === AMS / Filament ===

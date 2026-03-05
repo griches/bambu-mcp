@@ -1,6 +1,39 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { FleetManager } from "../fleet-manager.js";
+import { downloadFile } from "../ftp-client.js";
+import { execSync } from "child_process";
+import { tmpdir } from "os";
+import { join } from "path";
+import { unlinkSync } from "fs";
+
+/**
+ * Detect which plate number contains gcode inside a 3MF file on the printer.
+ * Downloads the file to a temp location, inspects the ZIP contents, and returns
+ * the first plate number that has a Metadata/plate_N.gcode entry.
+ */
+async function detectPlate(
+  host: string,
+  accessCode: string,
+  remotePath: string,
+): Promise<number | undefined> {
+  const tmp = join(tmpdir(), `bambu-mcp-${Date.now()}.3mf`);
+  try {
+    await downloadFile(host, accessCode, remotePath, tmp);
+    const output = execSync(`unzip -l "${tmp}"`, { encoding: "utf-8" });
+    const matches = output.matchAll(/Metadata\/plate_(\d+)\.gcode\b/g);
+    const plates = Array.from(matches, (m) => parseInt(m[1], 10)).sort(
+      (a, b) => a - b,
+    );
+    return plates.length > 0 ? plates[0] : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    try {
+      unlinkSync(tmp);
+    } catch {}
+  }
+}
 
 export function registerPrintControlTools(
   server: McpServer,
@@ -130,10 +163,24 @@ export function registerPrintControlTools(
       use_ams,
     }) => {
       return fleet.executeOnPrinters(printer, async (conn) => {
+        // Auto-detect plate for 3MF files when not specified
+        let resolvedPlate = plate;
+        if (
+          !plate &&
+          file.toLowerCase().endsWith(".3mf")
+        ) {
+          const remotePath = `${(path || "/").replace(/\/$/, "")}/${file}`;
+          resolvedPlate = await detectPlate(
+            conn.config.host,
+            conn.config.accessCode,
+            remotePath,
+          );
+        }
+
         const result = await conn.mqtt.printFile({
           file,
           path,
-          plate,
+          plate: resolvedPlate,
           ams_mapping,
           bed_type,
           bed_leveling,
