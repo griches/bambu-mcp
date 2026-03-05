@@ -9,12 +9,12 @@ import { unlinkSync, readFileSync } from "fs";
 
 interface PlateInfo {
   plate: number;
-  ams_mapping: number[];
+  filament_colors: string[];
+  filament_ids: number[];
 }
 
 /**
- * Detect which plate number contains gcode inside a 3MF file on the printer,
- * and read the AMS filament mapping from the plate's JSON metadata.
+ * Detect which plate has gcode and read its filament metadata from the 3MF.
  */
 async function detect3mfInfo(
   host: string,
@@ -32,20 +32,19 @@ async function detect3mfInfo(
     if (plates.length === 0) return undefined;
 
     const plate = plates[0];
+    let filamentColors: string[] = [];
+    let filamentIds: number[] = [];
 
-    // Try to read filament mapping from plate JSON
-    let amsMapping: number[] = [0];
     try {
       const json = execSync(`unzip -p "${tmp}" "Metadata/plate_${plate}.json"`, {
         encoding: "utf-8",
       });
       const meta = JSON.parse(json);
-      if (Array.isArray(meta.filament_ids) && meta.filament_ids.length > 0) {
-        amsMapping = meta.filament_ids;
-      }
+      filamentColors = meta.filament_colors || [];
+      filamentIds = meta.filament_ids || [];
     } catch {}
 
-    return { plate, ams_mapping: amsMapping };
+    return { plate, filament_colors: filamentColors, filament_ids: filamentIds };
   } catch {
     return undefined;
   } finally {
@@ -53,6 +52,48 @@ async function detect3mfInfo(
       unlinkSync(tmp);
     } catch {}
   }
+}
+
+/**
+ * Build ams_mapping by matching filament colors from the 3MF against
+ * the printer's AMS tray colors. Returns an array where each index
+ * corresponds to a slicer filament slot, and the value is the global
+ * AMS tray index (AMS0: 0-3, AMS1: 4-7, etc.).
+ */
+function buildAmsMapping(
+  filamentColors: string[],
+  filamentIds: number[],
+  amsStatus: any,
+): number[] | undefined {
+  if (!amsStatus?.ams || !Array.isArray(amsStatus.ams)) return undefined;
+  if (filamentColors.length === 0 || filamentIds.length === 0) return undefined;
+
+  // Build a flat list of { globalIndex, color } from all AMS trays
+  const trays: { globalIndex: number; color: string }[] = [];
+  for (const ams of amsStatus.ams) {
+    const amsIdx = parseInt(ams.id, 10);
+    for (const tray of ams.tray || []) {
+      const trayIdx = parseInt(tray.id, 10);
+      const globalIndex = amsIdx * 4 + trayIdx;
+      // tray_color is "RRGGBBAA", filament_colors are "#RRGGBB"
+      const color = (tray.tray_color || "").substring(0, 6).toUpperCase();
+      trays.push({ globalIndex, color });
+    }
+  }
+
+  // For each filament color in the 3MF, find the matching AMS tray
+  const maxId = Math.max(...filamentIds);
+  const mapping = Array.from({ length: maxId + 1 }, (_, i) => i);
+
+  for (let i = 0; i < filamentColors.length; i++) {
+    const needed = filamentColors[i].replace("#", "").toUpperCase();
+    const match = trays.find((t) => t.color === needed);
+    if (match && i < filamentIds.length) {
+      mapping[filamentIds[i]] = match.globalIndex;
+    }
+  }
+
+  return mapping;
 }
 
 export function registerPrintControlTools(
@@ -195,7 +236,15 @@ export function registerPrintControlTools(
           );
           if (info) {
             if (!plate) resolvedPlate = info.plate;
-            if (!ams_mapping) resolvedAmsMapping = info.ams_mapping;
+            if (!ams_mapping) {
+              // Match filament colors from 3MF to printer's AMS trays
+              const status = conn.mqtt.getCachedStatus();
+              resolvedAmsMapping = buildAmsMapping(
+                info.filament_colors,
+                info.filament_ids,
+                status.ams,
+              );
+            }
           }
         }
 
