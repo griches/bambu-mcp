@@ -310,11 +310,11 @@ export class BambuMQTTClient {
     const amsMapping = options.ams_mapping || [0];
     const h2d = this.isH2D();
 
-    // H2D uses ftp:// URL, other printers use file:///sdcard/
+    // H2D uses ftp:/// URL, other printers use file:///sdcard/
     let url: string;
     if (h2d) {
       const dir = (options.path || "/").replace(/\/$/, "");
-      url = dir ? `ftp://${dir}/${options.file}` : `ftp://${options.file}`;
+      url = dir ? `ftp:///${dir}/${options.file}` : `ftp:///${options.file}`;
     } else {
       const dir = (options.path || "/cache/").replace(/\/$/, "");
       url = `file:///sdcard${dir}/${options.file}`;
