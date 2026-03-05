@@ -74,7 +74,7 @@ export function registerPrintControlTools(
         .string()
         .optional()
         .describe(
-          "Directory path where the file lives on the SD card (e.g. '/cache/'). Default: '/cache/'",
+          "Directory path where the file lives on the SD card. Use '/' for files at root (e.g. USB/H2D), '/cache/' for cached files (default). Must match the path shown by list_files.",
         ),
       plate: z
         .number()
