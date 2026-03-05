@@ -1,0 +1,183 @@
+# Bambu MCP
+
+A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for controlling Bambu Lab 3D printers. Manage one printer or an entire fleet from any MCP-compatible AI assistant.
+
+## Features
+
+- **Multi-printer fleet management** — target a specific printer, all printers, or auto-select when only one is configured
+- **Full print control** — start, pause, resume, stop prints and skip objects mid-print
+- **File management** — list, upload, download, and delete files via FTP
+- **Hardware control** — lights, temperatures, speed profiles, nozzle configuration
+- **AMS support** — change filament trays, unload filament
+- **Camera** — enable/disable recording and timelapse
+- **Raw G-code** — send custom commands with safety limits
+- **Persistent config** — printer credentials saved to `~/.bambu-mcp/printers.json`
+
+## Supported Printers
+
+Tested with:
+- Bambu Lab P1S
+- Bambu Lab H2D
+- Bambu Lab A1 Mini
+
+Should work with any Bambu Lab printer that supports MQTT over LAN (X1C, X1, P1P, A1, etc.).
+
+## System Requirements
+
+- **Node.js** 18+
+- Bambu Lab printer(s) on the same local network
+- Printer **access code** and **serial number** (found in printer Settings > WLAN / Device, or in Bambu Studio)
+
+## Installation
+
+### Quick Start with npx
+
+```bash
+npx @griches/bambu-mcp
+```
+
+### Claude Code
+
+```bash
+claude mcp add bambu -- npx @griches/bambu-mcp
+```
+
+### Claude Desktop
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "bambu": {
+      "command": "npx",
+      "args": ["@griches/bambu-mcp"]
+    }
+  }
+}
+```
+
+### Build from Source
+
+```bash
+git clone https://github.com/griches/bambu-mcp.git
+cd bambu-mcp
+npm install
+npm run build
+```
+
+Then configure with the absolute path:
+
+```json
+{
+  "mcpServers": {
+    "bambu": {
+      "command": "node",
+      "args": ["/absolute/path/to/bambu-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+## Tools
+
+### Management
+
+| Tool | Description |
+|------|-------------|
+| `add_printer` | Add a printer to the fleet (IP, access code, serial number) |
+| `remove_printer` | Remove a printer and disconnect |
+| `list_printers` | List all configured printers with connection status |
+
+### Status
+
+| Tool | Description |
+|------|-------------|
+| `get_status` | Get printer status — print progress, temperatures, speed, AMS, lights |
+| `get_version` | Get firmware and module version information |
+
+### Print Control
+
+| Tool | Description |
+|------|-------------|
+| `start_print` | Start printing a file from the printer's SD card |
+| `pause_print` | Pause the current print |
+| `resume_print` | Resume a paused print |
+| `stop_print` | Cancel the current print |
+| `skip_objects` | Skip specific objects in a multi-object print |
+
+### Hardware
+
+| Tool | Description |
+|------|-------------|
+| `set_speed` | Set print speed — silent, standard, sport, ludicrous, or custom % |
+| `set_light` | Control chamber and work lights |
+| `set_temperature` | Set nozzle or bed temperature (with safety limits) |
+| `set_nozzle` | Set nozzle diameter for profile selection |
+
+### File Management
+
+| Tool | Description |
+|------|-------------|
+| `list_files` | List files on the printer's SD card |
+| `upload_file` | Upload a .3mf or .gcode file to the printer |
+| `download_file` | Download a file from the printer |
+| `delete_file` | Delete a file from the printer |
+
+### Camera
+
+| Tool | Description |
+|------|-------------|
+| `set_recording` | Enable or disable camera recording |
+| `set_timelapse` | Enable or disable timelapse recording |
+
+### AMS / Filament
+
+| Tool | Description |
+|------|-------------|
+| `change_filament` | Change to a different AMS filament tray |
+| `unload_filament` | Unload filament from the extruder |
+
+### G-code
+
+| Tool | Description |
+|------|-------------|
+| `send_gcode` | Send raw G-code commands (dangerous commands blocked for safety) |
+
+### Security
+
+| Tool | Description |
+|------|-------------|
+| `sign_message` | Sign a message with the Bambu Lab X.509 certificate |
+
+## Printer Targeting
+
+Every printer-targeting tool accepts an optional `printer` parameter:
+
+- **Specific printer** — use the printer ID (e.g. `"p1s-alpha"`)
+- **All printers** — use `"all"` to run the command on every connected printer in parallel
+- **Auto-select** — omit the parameter and it will auto-select if only one printer is configured
+
+## Connection Details
+
+This server communicates with printers using:
+
+- **MQTT** (port 8883, TLS) — for commands and status updates
+- **FTP** (port 990, implicit FTPS) — for file operations
+
+Printers do **not** need to be in LAN Only mode, though LAN Only mode guarantees full local access. In cloud mode, MQTT access is typically available but some features (camera, FTP) may be restricted on newer firmware.
+
+## X.509 Certificate Authentication
+
+Post-January 2025 firmware requires certificate-based authentication for local access. This server includes the publicly extracted X.509 certificate from the Bambu Connect desktop application by default.
+
+To override with your own certificate, set these environment variables:
+
+```bash
+export BAMBU_APP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+export BAMBU_APP_CERTIFICATE="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+```
+
+## License
+
+MIT
