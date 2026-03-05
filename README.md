@@ -5,7 +5,7 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for co
 ## Features
 
 - **Multi-printer fleet management** — target a specific printer, all printers, or auto-select when only one is configured
-- **Full print control** — start, pause, resume, stop prints and skip objects mid-print
+- **Full print control** — start, pause, resume, stop prints and skip objects mid-print. Auto-detects the correct plate in multi-plate 3MF files
 - **File management** — list, upload, download, and delete files via FTP
 - **Hardware control** — lights, temperatures, speed profiles, nozzle configuration
 - **AMS support** — change filament trays, unload filament
@@ -128,7 +128,7 @@ Printer configurations are saved to `~/.bambu-mcp/printers.json` and automatical
 
 | Tool | Description |
 |------|-------------|
-| `start_print` | Start printing a file from the printer's SD card |
+| `start_print` | Start printing a file from the printer's SD card. Auto-detects plate number for 3MF files |
 | `pause_print` | Pause the current print |
 | `resume_print` | Resume a paused print |
 | `stop_print` | Cancel the current print |
