@@ -344,8 +344,8 @@ export class BambuMQTTClient {
       led_node: node,
       led_mode: mode,
       led_on_time: 500,
-      led_off_time: 500,
-      loop_times: 0,
+      led_off_time: mode === "on" ? 0 : 500,
+      loop_times: mode === "on" ? 1 : 0,
       interval_time: 0,
     });
   }

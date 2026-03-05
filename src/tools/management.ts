@@ -110,6 +110,53 @@ export function registerManagementTools(
   );
 
   server.tool(
+    "reconnect_printer",
+    "Reconnect a printer (or all printers) by re-reading config and re-establishing MQTT connections.",
+    {
+      printer: z
+        .string()
+        .optional()
+        .describe("Printer ID, 'all', or omit for all printers"),
+    },
+    async ({ printer }) => {
+      const config = loadConfig();
+      const targets = printer && printer !== "all"
+        ? config.printers.filter((p) => p.id === printer)
+        : config.printers;
+
+      if (targets.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: printer
+                ? `Printer '${printer}' not found in config.`
+                : "No printers configured.",
+            },
+          ],
+        };
+      }
+
+      const results = await Promise.allSettled(
+        targets.map(async (p) => {
+          await fleet.connectPrinter(p);
+          return `[${p.name}] Reconnected successfully.`;
+        }),
+      );
+
+      const text = results
+        .map((r, i) =>
+          r.status === "fulfilled"
+            ? r.value
+            : `[${targets[i].name}] Failed: ${(r as PromiseRejectedResult).reason?.message || r.reason}`,
+        )
+        .join("\n");
+
+      return { content: [{ type: "text" as const, text }] };
+    },
+  );
+
+  server.tool(
     "list_printers",
     "List all configured printers with their connection status.",
     {},
