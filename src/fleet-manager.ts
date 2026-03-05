@@ -22,6 +22,7 @@ export class FleetManager {
       username: "bblp",
       password: config.accessCode,
       deviceId: config.serialNumber,
+      model: config.model,
     });
 
     await mqttClient.connect();

@@ -7,6 +7,7 @@ export interface MQTTConfig {
   username: string;
   password: string;
   deviceId: string;
+  model?: string;
 }
 
 export class BambuMQTTClient {
@@ -135,6 +136,11 @@ export class BambuMQTTClient {
 
   private nextSeqId(): string {
     return (this.sequenceId++).toString();
+  }
+
+  private isH2D(): boolean {
+    const model = (this.config.model || "").toUpperCase().trim();
+    return ["H2D", "H2D PRO", "H2DPRO", "H2C", "H2S"].includes(model);
   }
 
   private async sendCommand(
@@ -302,23 +308,40 @@ export class BambuMQTTClient {
     const plate = options.plate || 1;
     const useAms = options.use_ams !== false;
     const amsMapping = options.ams_mapping || [0];
-    const dir = (options.path || "/cache/").replace(/\/$/, "");
+    const h2d = this.isH2D();
+
+    // H2D uses ftp:// URL, other printers use file:///sdcard/
+    let url: string;
+    if (h2d) {
+      const dir = (options.path || "/").replace(/\/$/, "");
+      url = dir ? `ftp://${dir}/${options.file}` : `ftp://${options.file}`;
+    } else {
+      const dir = (options.path || "/cache/").replace(/\/$/, "");
+      url = `file:///sdcard${dir}/${options.file}`;
+    }
+
+    const bedLeveling = options.bed_leveling !== false;
+    const flowCali = options.flow_cali !== false;
+    const vibrationCali = options.vibration_cali !== false;
+    const layerInspect = options.layer_inspect || false;
+    const timelapse = options.timelapse || false;
 
     return this.sendCommand("print.project_file", {
       param: `Metadata/plate_${plate}.gcode`,
       file: options.file,
-      url: `file:///sdcard${dir}/${options.file}`,
-      subtask_name: options.file.replace(/\.3mf$/i, ""),
+      url,
+      md5: "",
+      subtask_name: options.file.replace(/\.3mf$/i, "").replace(/\.gcode$/i, ""),
       project_id: "0",
       profile_id: "0",
       task_id: "0",
       subtask_id: "0",
       bed_type: options.bed_type || "auto",
-      bed_leveling: options.bed_leveling !== false,
-      flow_cali: options.flow_cali !== false,
-      vibration_cali: options.vibration_cali !== false,
-      layer_inspect: options.layer_inspect || false,
-      timelapse: options.timelapse || false,
+      bed_leveling: h2d ? (bedLeveling ? 1 : 0) : bedLeveling,
+      flow_cali: h2d ? (flowCali ? 1 : 0) : flowCali,
+      vibration_cali: h2d ? (vibrationCali ? 1 : 0) : vibrationCali,
+      layer_inspect: h2d ? (layerInspect ? 1 : 0) : layerInspect,
+      timelapse: h2d ? (timelapse ? 1 : 0) : timelapse,
       use_ams: useAms,
       ams_mapping: amsMapping,
     });
