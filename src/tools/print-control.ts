@@ -5,18 +5,22 @@ import { downloadFile } from "../ftp-client.js";
 import { execSync } from "child_process";
 import { tmpdir } from "os";
 import { join } from "path";
-import { unlinkSync } from "fs";
+import { unlinkSync, readFileSync } from "fs";
+
+interface PlateInfo {
+  plate: number;
+  ams_mapping: number[];
+}
 
 /**
- * Detect which plate number contains gcode inside a 3MF file on the printer.
- * Downloads the file to a temp location, inspects the ZIP contents, and returns
- * the first plate number that has a Metadata/plate_N.gcode entry.
+ * Detect which plate number contains gcode inside a 3MF file on the printer,
+ * and read the AMS filament mapping from the plate's JSON metadata.
  */
-async function detectPlate(
+async function detect3mfInfo(
   host: string,
   accessCode: string,
   remotePath: string,
-): Promise<number | undefined> {
+): Promise<PlateInfo | undefined> {
   const tmp = join(tmpdir(), `bambu-mcp-${Date.now()}.3mf`);
   try {
     await downloadFile(host, accessCode, remotePath, tmp);
@@ -25,7 +29,23 @@ async function detectPlate(
     const plates = Array.from(matches, (m) => parseInt(m[1], 10)).sort(
       (a, b) => a - b,
     );
-    return plates.length > 0 ? plates[0] : undefined;
+    if (plates.length === 0) return undefined;
+
+    const plate = plates[0];
+
+    // Try to read filament mapping from plate JSON
+    let amsMapping: number[] = [0];
+    try {
+      const json = execSync(`unzip -p "${tmp}" "Metadata/plate_${plate}.json"`, {
+        encoding: "utf-8",
+      });
+      const meta = JSON.parse(json);
+      if (Array.isArray(meta.filament_ids) && meta.filament_ids.length > 0) {
+        amsMapping = meta.filament_ids;
+      }
+    } catch {}
+
+    return { plate, ams_mapping: amsMapping };
   } catch {
     return undefined;
   } finally {
@@ -163,25 +183,27 @@ export function registerPrintControlTools(
       use_ams,
     }) => {
       return fleet.executeOnPrinters(printer, async (conn) => {
-        // Auto-detect plate for 3MF files when not specified
+        // Auto-detect plate and AMS mapping for 3MF files when not specified
         let resolvedPlate = plate;
-        if (
-          !plate &&
-          file.toLowerCase().endsWith(".3mf")
-        ) {
+        let resolvedAmsMapping = ams_mapping;
+        if (file.toLowerCase().endsWith(".3mf")) {
           const remotePath = `${(path || "/").replace(/\/$/, "")}/${file}`;
-          resolvedPlate = await detectPlate(
+          const info = await detect3mfInfo(
             conn.config.host,
             conn.config.accessCode,
             remotePath,
           );
+          if (info) {
+            if (!plate) resolvedPlate = info.plate;
+            if (!ams_mapping) resolvedAmsMapping = info.ams_mapping;
+          }
         }
 
         const result = await conn.mqtt.printFile({
           file,
           path,
           plate: resolvedPlate,
-          ams_mapping,
+          ams_mapping: resolvedAmsMapping,
           bed_type,
           bed_leveling,
           flow_cali,
