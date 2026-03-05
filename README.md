@@ -79,6 +79,20 @@ Then configure with the absolute path:
 }
 ```
 
+## Adding Printers
+
+Once the server is running, add printers using the `add_printer` tool. You'll need the following from each printer:
+
+- **IP Address** — found on the printer's touchscreen under Settings > WLAN, or in Bambu Studio's Device tab
+- **Access Code** — found on the touchscreen under Settings > WLAN, or in Bambu Studio's Device tab
+- **Serial Number** — found on the touchscreen under Settings > Device, or in Bambu Studio's Device tab
+
+Example (via an AI assistant):
+
+> "Add my P1S at 192.168.0.136 with access code 30430928 and serial 01P00A3B0900744"
+
+Printer configurations are saved to `~/.bambu-mcp/printers.json` and automatically reconnect on server restart.
+
 ## Tools
 
 ### Management
