@@ -13,14 +13,27 @@ interface PlateInfo {
   filament_ids: number[];
 }
 
+// Cache 3MF analysis results keyed by remote path to avoid re-downloading
+const plateInfoCache = new Map<string, { info: PlateInfo; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Detect which plate has gcode and read its filament metadata from the 3MF.
+ * Results are cached to avoid redundant downloads when printing the same
+ * file across multiple printers.
  */
 async function detect3mfInfo(
   host: string,
   accessCode: string,
   remotePath: string,
 ): Promise<PlateInfo | undefined> {
+  // Check cache first (keyed by filename, not host, since plate info is the same)
+  const cacheKey = remotePath;
+  const cached = plateInfoCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.info;
+  }
+
   const tmp = join(tmpdir(), `bambu-mcp-${Date.now()}.3mf`);
   try {
     await downloadFile(host, accessCode, remotePath, tmp);
@@ -44,7 +57,9 @@ async function detect3mfInfo(
       filamentIds = meta.filament_ids || [];
     } catch {}
 
-    return { plate, filament_colors: filamentColors, filament_ids: filamentIds };
+    const info = { plate, filament_colors: filamentColors, filament_ids: filamentIds };
+    plateInfoCache.set(cacheKey, { info, timestamp: Date.now() });
+    return info;
   } catch {
     return undefined;
   } finally {
@@ -191,11 +206,11 @@ export function registerPrintControlTools(
       flow_cali: z
         .boolean()
         .optional()
-        .describe("Enable flow calibration. Default: true"),
+        .describe("Enable flow calibration. Default: false"),
       vibration_cali: z
         .boolean()
         .optional()
-        .describe("Enable vibration calibration. Default: true"),
+        .describe("Enable vibration calibration. Default: false"),
       timelapse: z
         .boolean()
         .optional()
@@ -227,7 +242,9 @@ export function registerPrintControlTools(
         // Auto-detect plate and AMS mapping for 3MF files when not specified
         let resolvedPlate = plate;
         let resolvedAmsMapping = ams_mapping;
-        if (file.toLowerCase().endsWith(".3mf")) {
+        const needs3mfDetection =
+          file.toLowerCase().endsWith(".3mf") && (!plate || !ams_mapping);
+        if (needs3mfDetection) {
           const remotePath = `${(path || "/").replace(/\/$/, "")}/${file}`;
           const info = await detect3mfInfo(
             conn.config.host,
@@ -272,6 +289,94 @@ export function registerPrintControlTools(
         }
         return `Print started: ${file}\nPrinter response: ${resultStr}`;
       });
+    },
+  );
+
+  server.tool(
+    "start_prints",
+    "Start multiple prints across different printers in parallel. Much faster than calling start_print multiple times.",
+    {
+      jobs: z
+        .array(
+          z.object({
+            printer: z.string().describe("Printer ID"),
+            file: z.string().describe("Filename on the printer"),
+            path: z
+              .string()
+              .optional()
+              .describe("Directory path (e.g. '/', '/cache/')"),
+            plate: z.number().optional().describe("Plate number (1-based)"),
+            ams_mapping: z
+              .array(z.number())
+              .optional()
+              .describe("AMS slot mapping array"),
+          }),
+        )
+        .describe("Array of print jobs to start in parallel"),
+    },
+    async ({ jobs }) => {
+      const results = await Promise.allSettled(
+        jobs.map(async (job) => {
+          const conn = fleet.getPrinter(job.printer);
+          if (!conn) {
+            throw new Error(
+              `Printer '${job.printer}' not found. Available: ${fleet.listIds().join(", ") || "none"}`,
+            );
+          }
+
+          let resolvedPlate = job.plate;
+          let resolvedAmsMapping = job.ams_mapping;
+          const needs3mfDetection =
+            job.file.toLowerCase().endsWith(".3mf") &&
+            (!job.plate || !job.ams_mapping);
+          if (needs3mfDetection) {
+            const remotePath = `${(job.path || "/").replace(/\/$/, "")}/${job.file}`;
+            const info = await detect3mfInfo(
+              conn.config.host,
+              conn.config.accessCode,
+              remotePath,
+            );
+            if (info) {
+              if (!job.plate) resolvedPlate = info.plate;
+              if (!job.ams_mapping) {
+                const status = conn.mqtt.getCachedStatus();
+                resolvedAmsMapping = buildAmsMapping(
+                  info.filament_colors,
+                  info.filament_ids,
+                  status.ams,
+                );
+              }
+            }
+          }
+
+          const result = await conn.mqtt.printFile({
+            file: job.file,
+            path: job.path,
+            plate: resolvedPlate,
+            ams_mapping: resolvedAmsMapping,
+          });
+          const resultStr = JSON.stringify(result);
+          const isFail =
+            result?.result?.toUpperCase() === "FAIL" ||
+            (result?.reason && result.reason.toLowerCase() !== "success") ||
+            result?.error ||
+            (result?.result && result.result.toLowerCase() !== "success");
+          if (isFail) {
+            return `[${conn.config.name || job.printer}] Failed: ${resultStr}`;
+          }
+          return `[${conn.config.name || job.printer}] Print started: ${job.file}`;
+        }),
+      );
+
+      const text = results
+        .map((r) =>
+          r.status === "fulfilled"
+            ? r.value
+            : `Error: ${(r as PromiseRejectedResult).reason?.message || r.reason}`,
+        )
+        .join("\n\n");
+
+      return { content: [{ type: "text" as const, text }] };
     },
   );
 }
