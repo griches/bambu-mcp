@@ -64,13 +64,15 @@ async function connectConfiguredPrinters(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  // Connect to printers first (non-blocking — server starts even if connections fail)
-  await connectConfiguredPrinters();
-
-  // Start MCP server
+  // Start MCP server first so it's available immediately
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Bambu Farm MCP server running on stdio.");
+
+  // Connect to printers in the background — don't block startup
+  connectConfiguredPrinters().catch((err) => {
+    console.error("Printer connection error:", err.message);
+  });
 }
 
 main().catch((err) => {

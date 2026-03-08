@@ -34,6 +34,18 @@ export class BambuMQTTClient {
     return new Promise((resolve, reject) => {
       let settled = false;
 
+      // Overall timeout — if nothing happens in 15s, give up
+      const overallTimeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          try {
+            this.client?.end(true);
+          } catch {}
+          this.client = null;
+          reject(new Error(`Connection to ${this.config.host} timed out after 15s`));
+        }
+      }, 15000);
+
       const options: mqtt.IClientOptions = {
         host: this.config.host,
         port: this.config.port,
@@ -50,6 +62,7 @@ export class BambuMQTTClient {
       this.client.on("connect", () => {
         if (settled) return;
         settled = true;
+        clearTimeout(overallTimeout);
         this.connected = true;
         this.client!.options.reconnectPeriod = 5000;
 
@@ -82,6 +95,7 @@ export class BambuMQTTClient {
         console.error("MQTT error:", err.message);
         if (!settled) {
           settled = true;
+          clearTimeout(overallTimeout);
           try {
             this.client?.end(true);
           } catch {}
@@ -94,6 +108,7 @@ export class BambuMQTTClient {
         this.connected = false;
         if (!settled) {
           settled = true;
+          clearTimeout(overallTimeout);
           try {
             this.client?.end(true);
           } catch {}
