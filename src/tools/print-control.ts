@@ -223,6 +223,10 @@ export function registerPrintControlTools(
         .boolean()
         .optional()
         .describe("Use AMS for filament. Default: true"),
+      nozzle_offset_cali: z
+        .boolean()
+        .optional()
+        .describe("Enable nozzle offset calibration check before printing (H2D dual-nozzle only). Default: false"),
     },
     async ({
       printer,
@@ -237,6 +241,7 @@ export function registerPrintControlTools(
       timelapse,
       layer_inspect,
       use_ams,
+      nozzle_offset_cali,
     }) => {
       return fleet.executeOnPrinters(printer, async (conn) => {
         // Auto-detect plate and AMS mapping for 3MF files when not specified
@@ -277,6 +282,7 @@ export function registerPrintControlTools(
           timelapse,
           layer_inspect,
           use_ams,
+          nozzle_offset_cali,
         });
         const resultStr = JSON.stringify(result);
         const isFail =

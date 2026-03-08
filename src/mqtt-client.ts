@@ -275,6 +275,7 @@ export class BambuMQTTClient {
     layer_inspect?: boolean;
     timelapse?: boolean;
     use_ams?: boolean;
+    nozzle_offset_cali?: boolean;
   }): Promise<any> {
     if (options.file.toLowerCase().endsWith(".3mf")) {
       return this.print3mfFile(options);
@@ -319,6 +320,7 @@ export class BambuMQTTClient {
     layer_inspect?: boolean;
     timelapse?: boolean;
     use_ams?: boolean;
+    nozzle_offset_cali?: boolean;
   }): Promise<any> {
     const plate = options.plate || 1;
     const useAms = options.use_ams !== false;
@@ -352,8 +354,12 @@ export class BambuMQTTClient {
       ams_mapping: amsMapping,
     };
 
-    // HA integration doesn't send file/md5 for H2D
-    if (!h2d) {
+    // H2D-specific handling
+    if (h2d) {
+      // nozzle_offset_cali: 0=off, 1=on, 2=auto (dual nozzle alignment check)
+      params.nozzle_offset_cali = options.nozzle_offset_cali ? 1 : 0;
+    } else {
+      // HA integration doesn't send file/md5 for H2D
       params.file = options.file;
     }
 
