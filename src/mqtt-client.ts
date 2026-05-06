@@ -153,9 +153,18 @@ export class BambuMQTTClient {
     return (this.sequenceId++).toString();
   }
 
+  private normalizedModel(): string {
+    return (this.config.model || "").toUpperCase().trim();
+  }
+
   private isH2D(): boolean {
-    const model = (this.config.model || "").toUpperCase().trim();
-    return ["H2D", "H2D PRO", "H2DPRO", "H2C", "H2S"].includes(model);
+    return ["H2D", "H2D PRO", "H2DPRO", "H2C", "H2S"].includes(
+      this.normalizedModel(),
+    );
+  }
+
+  private usesFtpProjectFileUrl(): boolean {
+    return this.isH2D() || this.normalizedModel() === "P2S";
   }
 
   private async sendCommand(
@@ -326,9 +335,10 @@ export class BambuMQTTClient {
     const useAms = options.use_ams !== false;
     const amsMapping = options.ams_mapping || [0];
     const h2d = this.isH2D();
+    const useFtpProjectFileUrl = this.usesFtpProjectFileUrl();
 
     let url: string;
-    if (h2d) {
+    if (useFtpProjectFileUrl) {
       const dir = (options.path || "/").replace(/\/$/, "");
       url = dir ? `ftp:///${dir}/${options.file}` : `ftp:///${options.file}`;
     } else {
